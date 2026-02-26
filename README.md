@@ -1,5 +1,3 @@
-# ChatDiet AI 🌿
-
 > **논문 기반 구현**: *"ChatDiet: Empowering personalized nutrition-oriented food recommender chatbots through an LLM-augmented framework"* (Yang et al., 2024, Smart Health)
 
 N-of-1 생체 데이터 기반 인과 추론(Causal Inference)으로 개인화된 영양 식품을 추천하는 AI 챗봇입니다.
