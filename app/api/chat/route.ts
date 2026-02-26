@@ -3,7 +3,7 @@
  * ChatDiet Orchestrator + Generative Response
  * * 논문 구현:
  * - Stage 4: Orchestrator (BM25 Retrieval + Transcribing + Prompt Engineering)
- * - Stage 5: Generative Response (Gemini 1.5 Flash Stable)
+ * - Stage 5: Generative Response (Gemini 1.5 Flash)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +18,7 @@ import mockData from '../../../data/mock-data.json';
 
 export const runtime = 'edge';
 
+// ─── Orchestrator: 하이브리드 프롬프트 생성 ──────────────────────────────
 function buildOrchestratorPrompt(
   userQuery: string,
   personalITEs: any[],
@@ -50,6 +51,8 @@ function buildOrchestratorPrompt(
 목표 건강 지표: ${healthGoal}
 
 ## [Personal Model] 개인 영양 효과 (ITE - 개별 처치 효과)
+이 수치는 ChatDiet의 인과 발견 알고리즘이 ${userName}님의 실제 데이터에서 산출한 개인화된 영양-건강 인과 효과입니다.
+
 ${nutritionEffectsText}
 
 ## [Population Model] 추천 식품 영양 정보 데이터베이스
@@ -64,6 +67,7 @@ ${foodListText}
 친근하고 전문적인 한국어로 작성하세요.`;
 }
 
+// ─── API Route Handler ────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { messages, apiKey } = await req.json();
@@ -73,17 +77,24 @@ export async function POST(req: NextRequest) {
     }
 
     const userQuery = messages[messages.length - 1]?.content || '';
+
+    // Stage 1 & 2: Personal Model - ITE 계산
     const records = mockData.daily_records as DailyRecord[];
     const profile = calculateITE(records);
     const healthGoal = extractHealthGoalFromQuery(userQuery);
 
+    // Stage 4 Retrieval: 관련 ITE 필터링
     const relevantITEs = (profile.top_nutrients_for_outcome[healthGoal] || [])
       .filter(ite => Math.abs(ite.ite_value) > 0.5)
       .slice(0, 5);
 
-    const targetNutrientTags = relevantITEs.flatMap(ite => nutrientKeyToSearchTags(ite.nutrient));
+    // Stage 3: Population Model - 식품 검색
+    const targetNutrientTags = relevantITEs.flatMap(ite =>
+      nutrientKeyToSearchTags(ite.nutrient)
+    );
     const recommendedFoods = searchFoodsByNutrient(targetNutrientTags, 5);
 
+    // Stage 4 Orchestrator: 하이브리드 프롬프트 생성
     const orchestratorPrompt = buildOrchestratorPrompt(
       userQuery,
       relevantITEs,
@@ -103,10 +114,9 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    // ⭐ 수정된 부분: Stable 모델 주소 (gemini-1.5-flash)
-    // Stage 5: Generative Response - 안정적인 v1 정식 버전으로 교체
+    // ⭐ 최종 해결: 가장 안정적인 v1beta 및 모델명 설정
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,11 +132,16 @@ export async function POST(req: NextRequest) {
 
     if (!geminiResponse.ok) {
       const error = await geminiResponse.json();
-      return NextResponse.json({ error: `Gemini API 오류: ${error.error?.message}` }, { status: 500 });
+      return NextResponse.json(
+        { error: `Gemini API 오류: ${error.error?.message || '알 수 없는 오류'}` },
+        { status: 500 }
+      );
     }
 
     const geminiData = await geminiResponse.json();
-    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '응답 생성 실패';
+    const responseText =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
+      '응답을 생성할 수 없습니다.';
 
     return NextResponse.json({
       response: responseText,
@@ -137,6 +152,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    console.error('ChatDiet API Error:', error);
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }
