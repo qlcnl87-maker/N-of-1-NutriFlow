@@ -104,14 +104,18 @@ export async function POST(req: NextRequest) {
     ];
 
     // ⭐ 수정된 부분: Stable 모델 주소 (gemini-1.5-flash)
+    // Stage 5: Generative Response - 안정적인 v1 정식 버전으로 교체
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: geminiMessages,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024,
+          },
         }),
       }
     );
