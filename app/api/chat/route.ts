@@ -16,8 +16,8 @@ import {
   searchFoodsByNutrient,
   nutrientKeyToSearchTags,
   type DailyRecord,
-} from '@/lib/causal-logic';
-import mockData from '@/data/mock-data.json';
+} from '../../../lib/causal-logic'; 
+import mockData from '../../../data/mock-data.json';
 
 export const runtime = 'edge';
 
