@@ -1,0 +1,37 @@
+{
+  "name": "chatdiet-ai",
+  "version": "1.0.0",
+  "description": "ChatDiet: LLM-Augmented Personalized Nutrition Food Recommender — Next.js Implementation",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5"
+  },
+  "keywords": [
+    "ChatDiet",
+    "nutrition",
+    "LLM",
+    "causal-inference",
+    "N-of-1",
+    "food-recommendation",
+    "personalization",
+    "Gemini"
+  ],
+  "author": "ChatDiet Implementation",
+  "license": "MIT"
+}
