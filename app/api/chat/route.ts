@@ -1,12 +1,9 @@
 /**
  * route.ts
  * ChatDiet Orchestrator + Generative Response
- * 
- * 논문 구현:
+ * * 논문 구현:
  * - Stage 4: Orchestrator (BM25 Retrieval + Transcribing + Prompt Engineering)
- * - Stage 5: Generative Response (Gemini 2.0 Flash)
- * 
- * 참조: Section 3.2.1 "Orchestrator", Section 3.4 "Generative Response"
+ * - Stage 5: Generative Response (Gemini 1.5 Flash)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,7 +19,6 @@ import mockData from '../../../data/mock-data.json';
 export const runtime = 'edge';
 
 // ─── Orchestrator: 하이브리드 프롬프트 생성 ──────────────────────────────
-// 논문: "Retrieving + Transcribing + Prompt Engineering"
 function buildOrchestratorPrompt(
   userQuery: string,
   personalITEs: Array<{
@@ -41,7 +37,7 @@ function buildOrchestratorPrompt(
   healthGoal: string,
   userName: string
 ): string {
-  // ── Transcribing: 수치 데이터를 텍스트로 변환 ────────────────────────
+  // Transcribing: 수치 데이터를 텍스트로 변환
   const nutritionEffectsText = personalITEs
     .map(ite => {
       const sign = ite.ite_value > 0 ? '+' : '';
@@ -59,9 +55,7 @@ function buildOrchestratorPrompt(
     })
     .join('\n');
 
-  // ── Prompt Engineering: Zero-Shot Chain-of-Thought ───────────────────
-  // 논문: "Please provide a food recommendation based exclusively on the nutrition effects
-  //       and the provided list of food ingredients"
+  // Prompt Engineering: Zero-Shot Chain-of-Thought
   return `당신은 ChatDiet AI 영양 상담사입니다. 
 사용자 ${userName}님의 개인 N-of-1 생체 데이터에서 추출한 인과 추론(Causal Inference) 결과를 바탕으로 맞춤형 식품 추천을 제공하세요.
 
@@ -103,24 +97,23 @@ export async function POST(req: NextRequest) {
 
     const userQuery = messages[messages.length - 1]?.content || '';
 
-    // ── Stage 1 & 2: Personal Model - ITE 계산 ──────────────────────────
+    // Stage 1 & 2: Personal Model - ITE 계산
     const records = mockData.daily_records as DailyRecord[];
     const profile = calculateITE(records);
     const healthGoal = extractHealthGoalFromQuery(userQuery);
 
-    // ── Stage 4 Retrieval: 관련 ITE 필터링 ──────────────────────────────
-    // 논문: "BM25 algorithm to retrieve nutrients that significantly impact [target outcome]"
+    // Stage 4 Retrieval: 관련 ITE 필터링 (BM25 알고리즘 모사)
     const relevantITEs = (profile.top_nutrients_for_outcome[healthGoal] || [])
       .filter(ite => Math.abs(ite.ite_value) > 0.5)
       .slice(0, 5);
 
-    // ── Stage 3: Population Model - 식품 검색 ───────────────────────────
+    // Stage 3: Population Model - 식품 검색
     const targetNutrientTags = relevantITEs.flatMap(ite =>
       nutrientKeyToSearchTags(ite.nutrient)
     );
     const recommendedFoods = searchFoodsByNutrient(targetNutrientTags, 5);
 
-    // ── Stage 4 Orchestrator: 하이브리드 프롬프트 생성 ───────────────────
+    // Stage 4 Orchestrator: 하이브리드 프롬프트 생성
     const orchestratorPrompt = buildOrchestratorPrompt(
       userQuery,
       relevantITEs,
@@ -129,7 +122,6 @@ export async function POST(req: NextRequest) {
       mockData.user.name
     );
 
-    // ── Stage 5: Generative Response - Gemini 2.0 Flash ─────────────────
     const geminiMessages = [
       ...messages.slice(0, -1).map((m: { role: string; content: string }) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -141,9 +133,9 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    // Gemini 2.0 Flash API 호출
+    // Stage 5: Generative Response - Gemini 1.5 Flash로 변경
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-exp:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,12 +145,6 @@ export async function POST(req: NextRequest) {
             temperature: 0.7,
             maxOutputTokens: 1024,
           },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          ],
         }),
       }
     );
@@ -176,7 +162,6 @@ export async function POST(req: NextRequest) {
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
       '응답을 생성할 수 없습니다.';
 
-    // ── 메타데이터: 분석 결과 함께 반환 ─────────────────────────────────
     return NextResponse.json({
       response: responseText,
       metadata: {
